@@ -1,262 +1,113 @@
-<div align="right">
-  <a href="README.md">English</a> | <b>中文</b>
-</div>
+# Voice Companion Agent — AI 原生陪伴聊天应用
 
-<br>
+> **一个 AI 原生陪伴聊天 App MVP**：人格化对话、长期记忆、流式回复、语音陪伴、AI 唱歌、情绪感知状态机 —— 基于 Flask + SocketIO + Claude。
 
-<p align="center">
-  <h1 align="center">🎙️ Voice Companion Agent</h1>
-  <p align="center">
-    基于意图路由的 AI 陪伴系统，支持动态人设与长期记忆、多模态输出（TTS + 云端 RVC 唱歌）、<br>
-    实时 Web 聊天界面与桌面 GUI。
-  </p>
-</p>
+[English README](README.md)
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white" />
-  <img src="https://img.shields.io/badge/Flask-3.x-000000?logo=flask" />
-  <img src="https://img.shields.io/badge/Claude-Sonnet-FF6B35?logo=anthropic" />
-  <img src="https://img.shields.io/badge/ElevenLabs-TTS-purple" />
-  <img src="https://img.shields.io/badge/Replicate-RVC-blue" />
-  <img src="https://img.shields.io/badge/License-MIT-green" />
-</p>
+## ✨ 功能一览
 
----
+- 💬 **聊天软件级体验** — 消息气泡、逐字流式输出、刷新不丢历史、会话管理（新建 / 归档 / 删除）
+- 🧠 **长期记忆系统** — LLM 结构化提取 6 类记忆（`profile / preference / episodic / emotional / relationship / task`），带重要度与置信度评分、去重、召回，用户可删除/清空
+- 🗣️ **语音陪伴** — 每条回复生成 TTS 音频资产（edge-tts → 可选 RVC 音色转换），逐条可重播
+- 📞 **通话模式** — 电话式 UI、极速短回复、语音识别输入、挂断关键词
+- 🎵 **AI 唱歌** — 可取消的云端 RVC 唱歌任务（Replicate），歌曲匹配 + 状态跟踪
+- 😴 **睡眠模式** — 极短、缓慢、不提问的哄睡回复
+- 🎭 **情绪感知** — 规则情绪分析自动切换安慰模式；对话状态机驱动前端动效
 
-## 项目简介
-
-Voice Companion Agent 是一个 AI 陪伴系统原型。它不是"调用一次大模型然后返回一段文字"的普通 chatbot，而是一个完整的 **AI 产品工程** 系统：
-
-- 自动检测用户**意图**，路由到对应的处理链路
-- **人设、记忆、用户画像**按请求动态拼接，而非固定在一个超长 system prompt 中
-- **历史对话**进行摘要压缩而非简单截断，保留上下文连续性，同时控制 token 成本
-- 同时支持**实时 Web 界面**（Flask + Socket.IO）和**桌面 GUI**（CustomTkinter）
-
-> 本仓库为面试展示用的 `code-only` 版本，不包含本地密钥、模型权重、私有语音资产、聊天记录及本地缓存。
-
----
-
-## 系统架构
-
-```mermaid
-flowchart TD
-    A["用户输入"] --> B["意图识别"]
-    B --> C{"模式路由"}
-    C -->|聊天 / 哄睡 / 唤醒| D["Prompt 构建"]
-    C -->|唱歌| S["歌曲匹配"]
-    D --> F["记忆 + 用户上下文注入"]
-    F --> E["LLM — Claude Sonnet"]
-    E --> G{"输出决策"}
-    G -->|语音| H["TTS — ElevenLabs / Edge-TTS"]
-    G -->|唱歌| I["云端 RVC — Replicate"]
-    H --> J["音频播放"]
-    I --> J
-    E --> K["历史压缩 + 记忆提取"]
-    K --> L["SQLite — 用户记忆存储"]
-```
-
----
-
-## 核心能力
-
-### 1. 意图驱动的模式路由
-将用户消息分类到四种模式：
-
-| 模式 | 触发条件 | 行为 |
-|------|---------|------|
-| `chat` | 普通聊天 | 带动态人设的温柔简短回复 |
-| `sleep` | 哄睡 / 安抚请求 | 语气轻柔缓慢，不提问，引导放松 |
-| `wake` | 唤醒触发词 | 返回正常聊天模式 |
-| `sing` | 点歌请求 | 匹配歌曲 → 云端 RVC 生成 → 音频播放 |
-
-高置信度场景走规则匹配，模糊场景交给 LLM 分类。
-
-### 2. 动态 Prompt 构建
-人设 identity、用户画像和近期记忆从独立存储中**按请求动态拼接**，保持系统 prompt 简短高效，同时让助手感受到上下文感知。
-
-### 3. 历史摘要压缩
-对话历史超过配置阈值时，最早的几轮被压缩成一句摘要保留，而不是直接丢弃。既保留对话连续性，又控制 prompt 长度和 token 成本。
-
-### 4. 多模态输出链路
-
-| 输出类型 | 技术 |
-|---------|------|
-| 文本回复 | Claude Sonnet（Anthropic API） |
-| 聊天语音 | ElevenLabs / Edge-TTS（备用） |
-| AI 唱歌 | Demucs 人声分离 + Replicate 云端 RVC |
-| 混音 | 自定义人声 + 伴奏混音器 |
-
-### 5. Web 端（Flask + Socket.IO）
-- WebSocket 实时聊天
-- Flask-Login 每用户会话隔离
-- 语音输入、自动播放、快捷回复、通话模式
-- 后台日志查看页面
-
-### 6. 桌面 GUI（CustomTkinter）
-- 头像发光动画反馈
-- 后台线程处理聊天与唱歌
-- 播放控制与状态显示
-
----
-
-## 目录结构
+## 🏗️ 技术架构
 
 ```
 voice-companion-agent/
-├── web_app.py          # Flask Web 后端 + Socket.IO 事件处理
-├── gui.py              # 桌面 GUI（CustomTkinter）
-├── main.py             # CLI 入口
-│
-├── llm.py              # Prompt 构建、历史管理、模型调用
-├── memory_vf.py        # 人设 Identity、用户画像、长期记忆
-├── intent.py           # 意图分类与模式路由
-│
-├── tts_module.py       # TTS 生成（ElevenLabs / Edge-TTS）
-├── audio.py            # 本地播放辅助
-├── sing.py             # 歌曲选择与唱歌编排
-├── replicate_rvc.py    # 云端 RVC 集成（Replicate）
-├── rvc_infer.py        # 本地 RVC 推理
-├── demucs_wrapper.py   # 人声分离（Demucs）
-│
-├── config.py           # 全局配置 + 环境变量加载
-├── design_voice.py     # 音色设计工具
-│
-├── templates/          # Jinja2 Web 模板
-├── static/             # 前端资源（CSS、JS）
-├── models/             # 模型权重目录（权重未公开）
-│
-├── requirements.txt
-├── .env.example
-└── .gitignore
+├── web_app.py                 # 启动入口：python web_app.py
+├── app/
+│   ├── main.py                # 应用工厂（Flask + SocketIO 装配）
+│   ├── api/                   # REST 蓝图：auth / chat / audio / admin
+│   ├── websocket/             # SocketIO 事件：chat（流式）/ call / sing / presence
+│   ├── services/              # 业务逻辑
+│   │   ├── chat_service.py    #   ← 编排器（单轮对话完整管线）
+│   │   ├── llm_service.py     #   Claude 封装：complete / stream / classify_json
+│   │   ├── memory_service.py  #   LLM 结构化记忆提取 + 生命周期
+│   │   ├── tts_service.py     #   统一 TTS + 音频资产记账
+│   │   ├── singing_service.py #   异步可取消唱歌任务
+│   │   └── ...                #   user / conversation / message / safety
+│   ├── agents/                # AI 原生组件
+│   │   ├── intent_router.py   #   14 种意图：规则 → LLM JSON → 缓存 → 兜底
+│   │   ├── prompt_builder.py  #   5 层 Prompt：人格/用户/会话/记忆/策略
+│   │   ├── dialog_state_machine.py  # 10 状态 × 16 事件
+│   │   ├── memory_retriever.py      # 相似度 + 重要度 + 时效评分
+│   │   ├── emotion_analyzer.py
+│   │   └── response_policy.py       # 按模式的回复参数
+│   ├── repositories/          # SQLite 持久化（业务层不写 SQL）
+│   ├── models/schemas.py      # 类型化 dataclass
+│   ├── config/settings.py     # 环境变量配置 + 生产环境安全检查
+│   └── utils/                 # 日志（密钥脱敏）/ 安全 / id / 时间
+├── templates/  static/        # 移动端优先 Web UI
+├── tests/                     # pytest 测试套件（44 个用例）
+└── migrations/                # 旧数据导入
 ```
 
----
+**单轮对话管线**（`chat_service.run_chat_turn`）：
 
-## 快速启动
+```
+用户输入 ──► 意图路由 ──► 情绪分析 ──► 持久化用户消息
+        ──► PromptBuilder（人格 + 记忆 + 策略）
+        ──► Claude 流式 ──► assistant_message_start/delta/done 事件
+        ──► 持久化 AI 消息 ──► TTS 音频资产
+        ──► 异步记忆提取 ──► 更新 user_states
+```
 
-### 前置要求
-- Python 3.11+
-- API Key：Anthropic（必须）、ElevenLabs（可选）、Replicate（唱歌功能需要）
+## 🗃️ 数据模型（SQLite）
 
-### 安装步骤
+| 表 | 用途 |
+|---|---|
+| `users` | 哈希密码、角色、显示名 |
+| `conversations` | 用户会话：模式 / 归档标记 |
+| `messages` | 每条消息持久化：role、content_type（text/voice/song/card）、intent、state、metadata |
+| `memories` | 6 类长期记忆：importance(1-5)、confidence(0-1)、软删除 |
+| `audio_assets` | 每段音频：类型、路径、URL、provider |
+| `user_states` | 对话状态、情绪状态、睡眠/通话模式 |
+
+轻量版本化迁移见 `app/repositories/db.py`；旧 `logs/conversations.db` 可用 `python migrations/import_legacy_logs.py` 导入。
+
+## 🚀 快速开始
 
 ```bash
-# 1. 克隆并创建虚拟环境
 git clone https://github.com/GitGPT-jpg/voice-companion-agent.git
 cd voice-companion-agent
-python -m venv .venv
-
-# 2. 激活（macOS/Linux）
-source .venv/bin/activate
-# 激活（Windows）
-.venv\Scripts\activate
-
-# 3. 安装依赖
 pip install -r requirements.txt
-
-# 4. 配置环境变量
-cp .env.example .env
-# 编辑 .env 填入 API Key
+cp .env.example .env        # 填入 ANTHROPIC_API_KEY 等
+python web_app.py           # → http://localhost:5000
 ```
 
-### 启动 Web 版
-```bash
-python web_app.py
-# 浏览器打开 http://localhost:5000
-```
-
-### 启动桌面版
-```bash
-python gui.py
-```
-
-### 启动命令行版
-```bash
-python main.py
-```
-
----
-
-## 环境变量说明
-
-| 变量 | 是否必须 | 说明 |
-|------|---------|------|
-| `ANTHROPIC_API_KEY` | 必须 | Claude API Key（核心 LLM） |
-| `ANTHROPIC_BASE_URL` | 否 | 自定义 API 端点（默认：`https://api.anthropic.com`） |
-| `ELEVENLABS_API_KEY` | 可选 | ElevenLabs 语音合成 |
-| `ELEVENLABS_VOICE_ID` | 可选 | ElevenLabs 目标音色 ID |
-| `REPLICATE_API_KEY` | 可选 | 云端 RVC 唱歌链路 |
-| `FISH_AUDIO_API_KEY` | 可选 | Fish Audio TTS（备用） |
-| `WEB_SECRET_KEY` | 必须 | Flask Session 密钥（部署前必须修改） |
-| `WEB_PORT` | 否 | Web 服务端口（默认：`5000`） |
-| `WEB_USER` | 否 | 管理员登录用户名 |
-| `WEB_PASS` | 否 | 管理员登录密码 |
-
----
-
-## Docker 部署
-
-```yaml
-# docker-compose.yml
-version: "3.9"
-services:
-  vca:
-    build: .
-    ports:
-      - "5000:5000"
-    env_file: .env
-    volumes:
-      - ./models:/app/models
-      - ./songs:/app/songs
-    restart: unless-stopped
-```
+运行测试：
 
 ```bash
-docker compose up -d
+pytest
 ```
 
----
+## 🔐 安全与隐私
 
-## 本公开仓库未包含
+- 生产环境启动检查：`APP_ENV=production` 时拒绝弱密钥与 `admin/admin` 默认账号
+- 密码哈希入库、登录限流（5 次 / 5 分钟）、HttpOnly + SameSite Cookie
+- 用户数据隔离（消息 / 记忆 / 音频）；音频路径防穿越
+- 日志密钥脱敏；数据导出（`GET /api/export`）、删除对话、清空记忆
 
-| 未包含内容 | 原因 |
-|-----------|------|
-| `.env` 密钥 | 安全 |
-| 模型权重（`.pth`、`.index`） | 文件过大 / 隐私 |
-| 私有语音资产 | 隐私 |
-| 歌曲库和生成的音频 | 隐私 |
-| 聊天记录和用户记忆数据 | 隐私 |
-| 本地缓存（`tts_cache/`、`vocal_cache/`、`sing_output/`） | 派生产物 |
+## ⚙️ 环境变量
 
----
+见 [.env.example](.env.example)，核心项：`APP_ENV`、`WEB_SECRET_KEY`、`ANTHROPIC_API_KEY`、`ANTHROPIC_MODEL`、`TTS_PROVIDER`、`REPLICATE_API_KEY`，以及功能开关 `ENABLE_SINGING` / `ENABLE_MEMORY_EXTRACTION` / `ENABLE_STREAMING`。
 
-## 技术栈
+## 🗺️ Roadmap
 
-| 层次 | 技术 |
-|------|------|
-| 语言 | Python 3.11 |
-| Web 框架 | Flask 3、Flask-SocketIO、Flask-Login |
-| 桌面 GUI | CustomTkinter |
-| 大模型 | Claude Sonnet（Anthropic API） |
-| TTS | ElevenLabs、Edge-TTS |
-| 音色转换 | RVC（本地）、Replicate（云端） |
-| 音频处理 | Demucs、pydub、sounddevice |
-| 存储 | SQLite（记忆）、文件系统（音频缓存） |
-| 前端 | HTML / CSS / 原生 JS |
+- [ ] 流式 TTS + 流式 ASR（`tts_service` 已预留接口）
+- [ ] 通话模式 VAD 与打断（barge-in）
+- [ ] 向量化 / 混合记忆检索（检索器接口已稳定）
+- [ ] 多人格支持（schema 已含 `current_persona_id`）
+- [ ] 移动端 App 外壳（REST + SocketIO API 与客户端解耦）
 
----
+## 🎤 面试讲述版本
 
-## Roadmap
-
-- [ ] 流式文本输出 + 前端实时渲染
-- [ ] 基于向量检索的长期记忆（替换 SQLite 关键词搜索）
-- [ ] 多音色支持（可切换的人设）
-- [ ] 移动端 Web 界面
-- [ ] REST API + OpenAPI 文档
-- [ ] 带 GPU 支持的容器化部署方案
-
----
+> “我把一个语音陪伴 Demo 升级成了 AI 原生聊天 App MVP。核心判断是：陪伴类产品的生死在于**记忆和状态**。所以我搭了分层架构 —— repositories 之上是 services，之上是 agents —— 每一轮对话都经过意图路由（规则优先，LLM JSON 兜底，高影响意图加置信度防护）、注入长期记忆的 5 层 PromptBuilder、以及驱动实时 UI 的对话状态机。记忆提取用的是 LLM 结构化输出加重要度/置信度评分，不是关键词匹配。所有数据持久化、按用户隔离、有 44 个 pytest 用例覆盖，流式与语音接口的设计保证将来接入实时语音和向量检索不需要重构。”
 
 ## License
 
-MIT © [GitGPT-jpg](https://github.com/GitGPT-jpg)
+MIT（个人/演示项目 —— 请自备 API Key 与音色模型）。
