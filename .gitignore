@@ -12,3 +12,7 @@ songs/
 models/*.pth
 models/*.index
 Retrieval-based-Voice-Conversion-WebUI/
+
+data/
+*.db-wal
+*.db-shm
