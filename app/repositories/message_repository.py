@@ -51,7 +51,7 @@ def list_for_conversation(conversation_id: str, limit: int = 100,
     if before:
         sql += " AND created_at < ?"
         params.append(before)
-    sql += " ORDER BY created_at DESC, id DESC LIMIT ?"
+    sql += " ORDER BY created_at DESC, rowid DESC LIMIT ?"
     params.append(limit)
     with get_conn() as conn:
         rows = conn.execute(sql, params).fetchall()
@@ -89,5 +89,5 @@ def list_for_user(user_id: str, limit: int = 1000) -> list[Message]:
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT * FROM messages WHERE user_id = ?"
-            " ORDER BY created_at DESC LIMIT ?", (user_id, limit)).fetchall()
+                " ORDER BY created_at DESC, rowid DESC LIMIT ?", (user_id, limit)).fetchall()
     return [_row_to_message(r) for r in reversed(rows)]
