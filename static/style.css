@@ -731,3 +731,52 @@ body.call-mode .quick-replies {
   body.call-mode .call-banner-text { font-size: 14px; max-width: 240px; }
   body.call-mode .status-text { font-size: 13px; }
 }
+
+/* ─── v7: streaming + message actions ─────────────────────────────────── */
+.stream-cursor {
+  display: inline-block;
+  animation: streamBlink 0.8s steps(1) infinite;
+  color: #B57BEE;
+  margin-left: 2px;
+}
+@keyframes streamBlink { 50% { opacity: 0; } }
+
+.bubble-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  align-self: flex-end;
+}
+.bubble-row:hover .bubble-actions,
+.bubble-row:focus-within .bubble-actions { opacity: 1; }
+.bubble-actions button {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #8B7AA0;
+  font-size: 11px;
+  border-radius: 8px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.bubble-actions button:hover { color: #FF6B9D; border-color: #FF6B9D; }
+.bubble-actions button.active { color: #FFD166; }
+
+.bubble-audio-btn {
+  background: rgba(255, 107, 157, 0.15);
+  border: none;
+  color: #FF6B9D;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+  cursor: pointer;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+.bubble-audio-btn:hover { background: rgba(255, 107, 157, 0.3); }
+
+@media (hover: none) {
+  .bubble-actions { opacity: 1; }
+}

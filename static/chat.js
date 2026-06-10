@@ -1,4 +1,4 @@
-/* chat.js v4 — language toggle + call mode */
+/* chat.js v7 — conversations + streaming + message actions + call mode */
 
 const socket = io({ transports: ["websocket"] });
 
@@ -101,6 +101,12 @@ let currentStatusVars = {};
 let currentQuickPool = "default";
 let currentCallSubtitleKey = "status_listening";
 let currentCallSubtitleVars = {};
+
+// conversation / streaming state
+let conversationId = null;
+let streamRow = null;       // bubble being streamed into
+let streamText = "";
+let streamedThisReq = false;
 
 // call mode state
 let callMode = false;
@@ -406,15 +412,122 @@ function addUserBubble(text) {
   scrollBottom();
 }
 
-function addBotBubble(text) {
+function addBotBubble(text, opts = {}) {
   hideTyping();
   removeEmptyHint();
   const row = document.createElement("div");
   row.className = "bubble-row bot";
   row.innerHTML = `<img class="bot-avatar" src="/static/avatar.png" alt=""><div class="bubble">${escHtml(text)}</div>`;
   chatArea.appendChild(row);
+  decorateBubble(row, opts);
   scrollBottom();
   return row.querySelector(".bubble");
+}
+
+// ─── message actions (copy / replay audio / favorite / delete) ────────────
+function decorateBubble(row, opts = {}) {
+  const bubble = row.querySelector(".bubble");
+  if (!bubble) return;
+  if (opts.messageId) row.dataset.messageId = opts.messageId;
+  if (opts.audioUrl) {
+    row.dataset.audioUrl = opts.audioUrl;
+    const play = document.createElement("button");
+    play.className = "bubble-audio-btn";
+    play.textContent = "▶";
+    play.title = "播放语音";
+    play.addEventListener("click", () => {
+      if (currentAudio && !currentAudio.paused) {
+        stopAllAudio();
+        play.textContent = "▶";
+      } else {
+        unlockAudio();
+        enqueueAudio(opts.audioUrl, () => { play.textContent = "▶"; });
+        play.textContent = "⏸";
+      }
+    });
+    bubble.appendChild(play);
+  }
+  const actions = document.createElement("div");
+  actions.className = "bubble-actions";
+  const copyBtn = document.createElement("button");
+  copyBtn.textContent = "复制";
+  copyBtn.addEventListener("click", () => {
+    navigator.clipboard?.writeText(bubble.textContent.replace(/[▶⏸]|复制|收藏|删除/g, "").trim());
+  });
+  actions.appendChild(copyBtn);
+  if (opts.messageId) {
+    const favBtn = document.createElement("button");
+    favBtn.textContent = "收藏";
+    favBtn.addEventListener("click", () => {
+      fetch(`/api/messages/${opts.messageId}/favorite`, { method: "POST" });
+      favBtn.classList.toggle("active");
+    });
+    const delBtn = document.createElement("button");
+    delBtn.textContent = "删除";
+    delBtn.addEventListener("click", () => {
+      fetch(`/api/messages/${opts.messageId}`, { method: "DELETE" })
+        .then((r) => { if (r.ok) row.remove(); });
+    });
+    actions.appendChild(favBtn);
+    actions.appendChild(delBtn);
+  }
+  row.appendChild(actions);
+}
+
+// ─── conversation history ────────────────────────────────────────────────
+async function loadHistory() {
+  try {
+    const res = await fetch("/api/conversations/active");
+    if (!res.ok) return;
+    const data = await res.json();
+    conversationId = data.id;
+    (data.messages || []).forEach((m) => {
+      if (m.role === "user") {
+        removeEmptyHint();
+        const row = document.createElement("div");
+        row.className = "bubble-row user";
+        row.innerHTML = `<div class="bubble">${escHtml(m.content)}</div>`;
+        if (m.id) row.dataset.messageId = m.id;
+        chatArea.appendChild(row);
+      } else if (m.role === "assistant") {
+        addBotBubble(m.content, { messageId: m.id, audioUrl: m.audio_url });
+      }
+    });
+    if (data.messages && data.messages.length) {
+      removeEmptyHint();
+      lastMsgTime = Date.now();
+      scrollBottom();
+    }
+  } catch (err) {
+    console.log("[history] load failed", err);
+  }
+}
+
+async function startNewConversation() {
+  try {
+    const res = await fetch("/api/conversations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    conversationId = data.id;
+    chatArea.innerHTML = "";
+    addEmptyHint();
+  } catch (err) {
+    console.log("[conversation] create failed", err);
+  }
+}
+
+async function clearCurrentConversation() {
+  if (!conversationId) return startNewConversation();
+  if (!confirm("删除当前对话？聊天记录将被清除。")) return;
+  try {
+    await fetch(`/api/conversations/${conversationId}`, { method: "DELETE" });
+  } catch (_) {}
+  conversationId = null;
+  await startNewConversation();
 }
 
 // ─── audio unlock ────────────────────────────────────────────────────────
@@ -454,6 +567,9 @@ function sendMessage() {
   unlockAudio();
 
   currentReqId = genReqId();
+  streamedThisReq = false;
+  streamRow = null;
+  streamText = "";
   const event = callModeActive() ? "call_message" : "chat_message";
   setBusy(true);
   setDot("busy");
@@ -461,7 +577,7 @@ function sendMessage() {
   startGlow("pink");
   showTyping();
 
-  socket.emit(event, { text, req_id: currentReqId });
+  socket.emit(event, { text, req_id: currentReqId, conversation_id: conversationId });
 }
 
 sendBtn.addEventListener("click", sendMessage);
@@ -731,13 +847,77 @@ function sendCallMessage(text) {
   setStatusLocalized("status_call_processing", "#B57BEE");
   showTyping();
 
-  socket.emit("call_message", { text, req_id: currentReqId });
+  socket.emit("call_message", { text, req_id: currentReqId, conversation_id: conversationId });
 }
 
 callBtn.addEventListener("click", toggleCallMode);
 hangUpBtn.addEventListener("click", hangUpCall);
 
 // ─── sockets ─────────────────────────────────────────────────────────────
+// streaming events
+socket.on("assistant_message_start", (data) => {
+  if (data.req_id !== currentReqId) return;
+  if (data.conversation_id) conversationId = data.conversation_id;
+  hideTyping();
+  removeEmptyHint();
+  streamText = "";
+  streamedThisReq = true;
+  const row = document.createElement("div");
+  row.className = "bubble-row bot streaming";
+  row.innerHTML = `<img class="bot-avatar" src="/static/avatar.png" alt=""><div class="bubble"><span class="stream-text"></span><span class="stream-cursor">▍</span></div>`;
+  chatArea.appendChild(row);
+  streamRow = row;
+  scrollBottom();
+});
+
+socket.on("assistant_message_delta", (data) => {
+  if (data.req_id !== currentReqId || !streamRow) return;
+  streamText += data.delta || "";
+  const span = streamRow.querySelector(".stream-text");
+  if (span) span.textContent = streamText;
+  scrollBottom();
+});
+
+socket.on("assistant_message_done", (data) => {
+  if (data.req_id !== currentReqId) return;
+  if (data.conversation_id) conversationId = data.conversation_id;
+  const msg = data.message || {};
+  if (streamRow) {
+    const bubble = streamRow.querySelector(".bubble");
+    bubble.innerHTML = escHtml(msg.content || streamText);
+    streamRow.classList.remove("streaming");
+    decorateBubble(streamRow, { messageId: msg.id, audioUrl: msg.audio_url });
+    streamRow = null;
+  } else if (msg.content) {
+    addBotBubble(msg.content, { messageId: msg.id, audioUrl: msg.audio_url });
+    streamedThisReq = true;
+  }
+  if (msg.audio_url && !callMode) enqueueAudio(msg.audio_url);
+});
+
+socket.on("assistant_message_error", (data) => {
+  if (data.req_id !== currentReqId) return;
+  hideTyping();
+  if (streamRow) { streamRow.remove(); streamRow = null; }
+});
+
+socket.on("dialog_state", (data) => {
+  if (data.req_id && data.req_id !== currentReqId) return;
+  const stateKeyMap = {
+    thinking: "status_thinking",
+    generating_voice: "status_thinking",
+    singing: "status_singing",
+  };
+  const key = stateKeyMap[data.state];
+  if (key && key !== "status_singing") setStatusLocalized(key, "#B57BEE");
+});
+
+socket.on("song_card", (data) => {
+  if (data.req_id !== currentReqId) return;
+  // 状态由 singing_start / song_ready / singing_end 驱动 UI，这里仅记录
+  console.log("[song]", data.status, data.title || "");
+});
+
 socket.on("call_reply", (data) => {
   if (data.req_id !== currentReqId) return;
   hideTyping();
@@ -767,7 +947,12 @@ socket.on("bot_message", (data) => {
   if (data.req_id !== currentReqId) return;
   hideTyping();
   startGlow(data.glow || "pink");
-  addBotBubble(data.text || "");
+  if (streamedThisReq) {
+    // 流式气泡已渲染并播放音频，避免重复
+    streamedThisReq = false;
+    return;
+  }
+  addBotBubble(data.text || "", { messageId: data.message_id, audioUrl: data.audio_url });
   if (data.audio_url) enqueueAudio(data.audio_url);
 });
 
@@ -869,3 +1054,8 @@ initSpeech();
 updateInputPlaceholder();
 addEmptyHint();
 updateQuickReplies("default");
+
+const newConvBtn = document.getElementById("newConvBtn");
+if (newConvBtn) newConvBtn.addEventListener("click", clearCurrentConversation);
+
+loadHistory();
