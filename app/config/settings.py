@@ -40,10 +40,8 @@ class Settings:
     project_dir: str = _PROJECT_DIR
 
     # ── Database ──
-    database_url: str = field(default_factory=lambda: os.getenv(
-        "DATABASE_URL",
-        os.path.join(_PROJECT_DIR, "data", "app.db"),
-    ))
+    database_url: str = field(default_factory=lambda: (
+        os.getenv("DATABASE_URL") or os.path.join(_PROJECT_DIR, "data", "app.db")))
     legacy_log_db: str = field(default_factory=lambda: os.path.join(
         _PROJECT_DIR, "logs", "conversations.db"))
 
