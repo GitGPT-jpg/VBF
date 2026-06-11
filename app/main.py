@@ -37,6 +37,11 @@ def index():
     return render_template("chat.html", username=current_user.display_name)
 
 
+@pages.route("/health")
+def health():
+    return {"status": "ok"}, 200
+
+
 def create_app() -> tuple[Flask, SocketIO]:
     """Build the Flask app + SocketIO instance."""
     setup_logging(settings.log_level)
@@ -101,8 +106,9 @@ def _print_startup(port: int) -> None:
         lan_ip = "<本机IP>"
 
     print("\n💕 AI Companion Chat 启动")
-    print(f"   本机:  http://localhost:{port}")
-    print(f"   局域网: http://{lan_ip}:{port}")
+    print(f"   本机:  http://127.0.0.1:{port}/login")
+    print(f"   备用:  http://localhost:{port}/login")
+    print(f"   局域网: http://{lan_ip}:{port}/login")
 
     ngrok_log = os.path.join(settings.project_dir, "logs", "ngrok.log")
     ngrok_url = None

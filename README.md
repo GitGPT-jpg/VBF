@@ -76,7 +76,13 @@ git clone https://github.com/GitGPT-jpg/voice-companion-agent.git
 cd voice-companion-agent
 pip install -r requirements.txt
 cp .env.example .env        # fill in ANTHROPIC_API_KEY etc.
-python web_app.py           # → http://localhost:5000
+python web_app.py           # → http://127.0.0.1:5000/login
+```
+
+For local demos on Chromium browsers, avoid ports `5060` and `5061` because they are treated as unsafe ports (`ERR_UNSAFE_PORT`). A safe example is:
+
+```bash
+WEB_PORT=5500 python web_app.py
 ```
 
 Run tests:

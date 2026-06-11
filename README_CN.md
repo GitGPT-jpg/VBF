@@ -76,7 +76,13 @@ git clone https://github.com/GitGPT-jpg/voice-companion-agent.git
 cd voice-companion-agent
 pip install -r requirements.txt
 cp .env.example .env        # 填入 ANTHROPIC_API_KEY 等
-python web_app.py           # → http://localhost:5000
+python web_app.py           # → http://127.0.0.1:5000/login
+```
+
+本地演示如果使用 Chromium 浏览器，避免使用 `5060` 和 `5061`，因为它们会被判定为不安全端口（`ERR_UNSAFE_PORT`）。可改用：
+
+```bash
+WEB_PORT=5500 python web_app.py
 ```
 
 运行测试：
