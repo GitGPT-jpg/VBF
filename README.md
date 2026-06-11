@@ -104,10 +104,6 @@ See [.env.example](.env.example) — key ones: `APP_ENV`, `WEB_SECRET_KEY`, `ANT
 - [ ] Multi-persona support (`user_states.current_persona_id` already in schema)
 - [ ] Mobile app shell (REST + SocketIO API is client-agnostic)
 
-## 🎤 How I'd present this project
-
-*"I evolved a voice-companion demo into an AI-native chat app MVP. The core insight: companionship products live or die on **memory and state**. So I built a layered architecture — repositories under services under agents — where every turn flows through an intent router (rules first, LLM JSON fallback with confidence guards on high-impact intents), a 5-layer prompt builder that injects retrieved long-term memories, and a dialog state machine that drives the real-time UI. Memory extraction is LLM-structured with importance/confidence scoring, not keyword matching. Everything is persisted, user-isolated, tested (44 pytest cases), and the streaming/voice interfaces are designed so realtime voice and vector retrieval can land without re-architecting."*
-
 ## License
 
 MIT (personal/demo project — bring your own API keys and voice models).

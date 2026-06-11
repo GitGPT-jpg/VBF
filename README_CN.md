@@ -104,10 +104,6 @@ pytest
 - [ ] 多人格支持（schema 已含 `current_persona_id`）
 - [ ] 移动端 App 外壳（REST + SocketIO API 与客户端解耦）
 
-## 🎤 面试讲述版本
-
-> “我把一个语音陪伴 Demo 升级成了 AI 原生聊天 App MVP。核心判断是：陪伴类产品的生死在于**记忆和状态**。所以我搭了分层架构 —— repositories 之上是 services，之上是 agents —— 每一轮对话都经过意图路由（规则优先，LLM JSON 兜底，高影响意图加置信度防护）、注入长期记忆的 5 层 PromptBuilder、以及驱动实时 UI 的对话状态机。记忆提取用的是 LLM 结构化输出加重要度/置信度评分，不是关键词匹配。所有数据持久化、按用户隔离、有 44 个 pytest 用例覆盖，流式与语音接口的设计保证将来接入实时语音和向量检索不需要重构。”
-
 ## License
 
 MIT（个人/演示项目 —— 请自备 API Key 与音色模型）。
