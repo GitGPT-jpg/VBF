@@ -46,11 +46,20 @@ class Settings:
         _PROJECT_DIR, "logs", "conversations.db"))
 
     # ── LLM ──
+    llm_provider: str = field(default_factory=lambda: (
+        os.getenv("LLM_PROVIDER", "anthropic") or "anthropic").strip().lower())
     anthropic_api_key: str = field(default_factory=lambda: os.getenv("ANTHROPIC_API_KEY", ""))
     anthropic_base_url: str = field(default_factory=lambda: os.getenv(
         "ANTHROPIC_BASE_URL", "https://api.anthropic.com") or "https://api.anthropic.com")
     anthropic_model: str = field(default_factory=lambda: os.getenv(
         "ANTHROPIC_MODEL", "claude-sonnet-4-20250514"))
+    # OpenAI-compatible backend (e.g. DeepSeek, OpenAI, local vLLM)
+    openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
+    openai_base_url: str = field(default_factory=lambda: (
+        os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+        or "https://api.openai.com/v1"))
+    openai_model: str = field(default_factory=lambda: os.getenv(
+        "OPENAI_MODEL", "gpt-4o-mini") or "gpt-4o-mini")
 
     # ── TTS / Voice ──
     tts_provider: str = field(default_factory=lambda: os.getenv("TTS_PROVIDER", "edge"))
@@ -92,8 +101,10 @@ class Settings:
         if not self.web_secret_key:
             warns.append("WEB_SECRET_KEY not set — using an ephemeral dev key "
                          "(sessions reset on restart).")
-        if not self.anthropic_api_key:
+        if self.llm_provider == "anthropic" and not self.anthropic_api_key:
             warns.append("ANTHROPIC_API_KEY not set — LLM replies will fall back.")
+        if self.llm_provider in ("openai", "deepseek") and not self.openai_api_key:
+            warns.append("OPENAI_API_KEY not set — LLM replies will fall back.")
         return warns
 
 
